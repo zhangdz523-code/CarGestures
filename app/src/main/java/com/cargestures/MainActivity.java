@@ -25,38 +25,20 @@ public class MainActivity extends Activity {
     layout.addView(title);
 
     TextView desc = new TextView(this);
-    desc.setText("\n开启无障碍服务后生效：\n\n· 底部上滑 → 返回主页\n· 底部上滑停住 → 最近任务\n· 左右边缘向内滑 → 返回\n\n(先隐藏导航栏再开启手势)");
+    desc.setText("\n开启无障碍服务后生效：\n\n· 底部上滑 → 返回主页\n· 底部上滑停住 → 最近任务\n· 左右边缘向内滑 → 返回\n\n当前由 adb 直接启用，无需手动设置。\n若手势失效，检查无障碍列表里\n「车机手势」是否已开启。");
     desc.setTextSize(16);
     layout.addView(desc);
 
     Button open = new Button(this);
-    open.setText("1. 打开无障碍设置");
-    open.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+    open.setText("打开系统无障碍设置");
+    open.setOnClickListener(v -> {
+      try {
+        startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+      } catch (Exception e) {
+        Toast.makeText(this, "系统无此设置页，请用 adb 启用", Toast.LENGTH_LONG).show();
+      }
+    });
     layout.addView(open);
-
-    Button hideNav = new Button(this);
-    hideNav.setText("2. 隐藏导航栏");
-    hideNav.setOnClickListener(v -> {
-      try {
-        Process p = Runtime.getRuntime().exec(new String[]{"settings", "put", "global", "policy_control", "immersive.navigation=*"});
-        Toast.makeText(this, "需要 adb 授权，若无效请用 adb 执行", Toast.LENGTH_LONG).show();
-      } catch (Exception e) {
-        Toast.makeText(this, "请用 adb: settings put global policy_control 'immersive.navigation=*'", Toast.LENGTH_LONG).show();
-      }
-    });
-    layout.addView(hideNav);
-
-    Button showNav = new Button(this);
-    showNav.setText("恢复导航栏");
-    showNav.setOnClickListener(v -> {
-      try {
-        Process p = Runtime.getRuntime().exec(new String[]{"settings", "put", "global", "policy_control", "null"});
-        Toast.makeText(this, "已请求恢复", Toast.LENGTH_SHORT).show();
-      } catch (Exception e) {
-        Toast.makeText(this, "请用 adb: settings put global policy_control null", Toast.LENGTH_LONG).show();
-      }
-    });
-    layout.addView(showNav);
 
     setContentView(layout);
   }

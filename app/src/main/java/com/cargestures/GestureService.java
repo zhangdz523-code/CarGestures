@@ -1,13 +1,10 @@
 package com.cargestures;
 
 import android.accessibilityservice.AccessibilityService;
-import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Color;
 import android.graphics.PixelFormat;
-import android.os.Handler;
-import android.os.Looper;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -15,104 +12,104 @@ import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 
 /**
- * 底部上滑=主页 / 上滑停住=多任务；左右边缘内滑=返回。
- * 触发区用 TYPE_ACCESSIBILITY_OVERLAY 悬浮窗实现（无障碍服务可直接创建，无需悬浮窗权限）。
+ * 车机全面屏手势：底部上滑=主页，上滑停住=多任务，左右边缘内滑=返回。
+ * 触发区用 TYPE_ACCESSIBILITY_OVERLAY + gravity 定位（旋转无关）。
  */
 public class GestureService extends AccessibilityService {
+  private static final String TAG = "CarGesture";
   private WindowManager wm;
-  private Handler handler = new Handler(Looper.getMainLooper());
-  private int navBarHeight;
-
   private View bottomZone, leftZone, rightZone;
-
-  // 底部区手势状态
-  private float downY;
-  private long downTime;
-  private boolean moved = false;
+  private int screenW, screenH;
 
   @Override
   protected void onServiceConnected() {
     super.onServiceConnected();
+    Log.i(TAG, "service connected");
     wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
-    int[] size = new int[2];
-    getDefaultDisplay(size);
-    int w = size[0], h = size[1];
-    navBarHeight = h / 10; // 底部 10% 高度区域
-
-    addBottomZone(w, h);
-    addSideZone(true, w, h);
-    addSideZone(false, w, h);
-  }
-
-  private void getDefaultDisplay(int[] out) {
-    android.view.Display d = wm.getDefaultDisplay();
     android.graphics.Point p = new android.graphics.Point();
-    d.getRealSize(p);
-    out[0] = p.x;
-    out[1] = p.y;
+    wm.getDefaultDisplay().getRealSize(p);
+    screenW = p.x;
+    screenH = p.y;
+    Log.i(TAG, "screen=" + screenW + "x" + screenH);
+    try {
+      addBottomZone();
+      addSideZone(true);
+      addSideZone(false);
+      Log.i(TAG, "zones added");
+    } catch (Exception e) {
+      Log.e(TAG, "addZone error", e);
+    }
   }
 
-  private WindowManager.LayoutParams zoneParams(int x, int y, int w, int h) {
-    WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+  private WindowManager.LayoutParams lp(int w, int h, int gravity) {
+    WindowManager.LayoutParams l = new WindowManager.LayoutParams(
         w, h,
         WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
             | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
             | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
         PixelFormat.TRANSLUCENT);
-    lp.gravity = Gravity.TOP | Gravity.START;
-    lp.x = x;
-    lp.y = y;
-    return lp;
+    l.gravity = gravity;
+    return l;
   }
 
-  private void addBottomZone(int w, int h) {
+  private void addBottomZone() {
     bottomZone = new View(this);
-    bottomZone.setBackgroundColor(0x00000000);
-    bottomZone.setOnTouchListener((v, ev) -> {
-      switch (ev.getActionMasked()) {
-        case MotionEvent.ACTION_DOWN:
-          downY = ev.getY();
-          downTime = System.currentTimeMillis();
-          moved = false;
-          return true;
-        case MotionEvent.ACTION_MOVE:
-          if (downY - ev.getY() > 30) moved = true;
-          return true;
-        case MotionEvent.ACTION_UP:
-          float dy = downY - ev.getY();
-          long held = System.currentTimeMillis() - downTime;
-          if (moved && held > 450 && dy > h * 0.18f) {
-            goRecents();
-          } else if (dy > h * 0.12f) {
-            goHome();
-          }
-          return true;
+    bottomZone.setBackgroundColor(0x00FFFFFF);
+    bottomZone.setOnTouchListener(new View.OnTouchListener() {
+      private float downY;
+      private long downTime;
+      private boolean moved;
+
+      @Override
+      public boolean onTouch(View v, MotionEvent ev) {
+        switch (ev.getActionMasked()) {
+          case MotionEvent.ACTION_DOWN:
+            downY = ev.getY();
+            downTime = System.currentTimeMillis();
+            moved = false;
+            return true;
+          case MotionEvent.ACTION_MOVE:
+            if (downY - ev.getY() > 25) moved = true;
+            return true;
+          case MotionEvent.ACTION_UP:
+            float dy = downY - ev.getY();
+            long held = System.currentTimeMillis() - downTime;
+            if (moved && held > 400 && dy > screenH * 0.15f) {
+              goRecents();
+            } else if (dy > screenH * 0.10f) {
+              goHome();
+            }
+            return true;
+        }
+        return false;
       }
-      return false;
     });
-    int bh = h / 8;
-    wm.addView(bottomZone, zoneParams(0, h - bh, w, bh));
+    wm.addView(bottomZone, lp(screenW, screenH / 6, Gravity.BOTTOM));
   }
 
-  private void addSideZone(boolean left, int w, int h) {
+  private void addSideZone(final boolean left) {
     View zone = new View(this);
-    zone.setBackgroundColor(0x00000000);
-    final float downX[] = new float[1];
-    zone.setOnTouchListener((v, ev) -> {
-      switch (ev.getActionMasked()) {
-        case MotionEvent.ACTION_DOWN:
-          downX[0] = ev.getX();
-          return true;
-        case MotionEvent.ACTION_UP:
-          float travel = left ? ev.getX() - downX[0] : downX[0] - ev.getX();
-          if (travel > h * 0.08f) goBack();
-          return true;
+    zone.setBackgroundColor(0x00FFFFFF);
+    final float[] downX = new float[1];
+    zone.setOnTouchListener(new View.OnTouchListener() {
+      @Override
+      public boolean onTouch(View v, MotionEvent ev) {
+        switch (ev.getActionMasked()) {
+          case MotionEvent.ACTION_DOWN:
+            downX[0] = ev.getX();
+            return true;
+          case MotionEvent.ACTION_UP:
+            float travel = left ? ev.getX() - downX[0] : downX[0] - ev.getX();
+            if (travel > screenH * 0.06f) goBack();
+            return true;
+        }
+        return false;
       }
-      return false;
     });
-    int zw = 30;
-    wm.addView(zone, zoneParams(left ? 0 : w - zw, h / 4, zw, h / 2));
+    wm.addView(zone, lp(40, screenH / 2, left ? Gravity.LEFT | Gravity.CENTER_VERTICAL
+        : Gravity.RIGHT | Gravity.CENTER_VERTICAL));
   }
 
   private void removeZones() {
