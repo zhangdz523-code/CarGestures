@@ -12,13 +12,13 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-    - uses: gradle/actions/setup-gradle@v3
-    - name: Build (system gradle fallback)
+    - name: Install Gradle
       run: |
-        # 无 wrapper，用系统方式装 gradle
-        wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
-        unzip -q gradle-8.5-bin.zip
-        gradle-8.5/bin/gradle -p . assembleDebug --no-daemon
+        wget -q https://mirrors.cloud.tencent.com/gradle/gradle-8.5-bin.zip
+        unzip -q gradle-8.5-bin.zip -d $HOME/gradle
+        echo "$HOME/gradle/gradle-8.5/bin" >> $GITHUB_PATH
+    - name: Build
+      run: gradle -p . assembleDebug --no-daemon --stacktrace
     - uses: actions/upload-artifact@v4
       with:
         name: cargestures-apk
