@@ -13,7 +13,6 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
     - uses: gradle/actions/setup-gradle@v3
-    - run: chmod +x gradlew
     - name: Build (system gradle fallback)
       run: |
         # 无 wrapper，用系统方式装 gradle
